@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>VORTEX | Tofaş Modifiye & Yarış</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800&family=Rajdhani:wght@600;700&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Rajdhani', sans-serif; }
+        body { background: #050508; color: #fff; overflow: hidden; height: 100vh; display: flex; }
+
+        /* ANA DIŞ EKRAN */
+        .game-container { display: grid; grid-template-columns: 350px 1fr 300px; width: 100vw; height: 100vh; }
+
+        /* 1. SOL PANEL: MODİFİYE GARAJI */
+        .garage-panel { background: #0c0c14; border-right: 2px solid #1e293b; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+        h2 { font-family: 'Orbitron', sans-serif; color: #3b82f6; text-transform: uppercase; text-align: center; font-size: 1.4rem; border-bottom: 1px solid #1e293b; padding-bottom: 10px; }
+        .control-group { background: #131322; padding: 15px; border-radius: 12px; border: 1px solid #1e293b; }
+        .control-group label { display: block; margin-bottom: 10px; font-weight: bold; color: #94a3b8; }
+        .btn-mod { width: 100%; padding: 10px; background: #1e293b; border: 1px solid #334155; color: white; border-radius: 6px; cursor: pointer; margin-bottom: 8px; font-weight: bold; transition: 0.2s; }
+        .btn-mod:hover { background: #3b82f6; }
+        .range-slider { width: 100%; accent-color: #3b82f6; }
+
+        /* 2. ORTA PANEL: YARIŞ PİSTİ VE ARABA VİZYONU */
+        .main-play-area { background: #0f0f18; display: flex; flex-direction: column; position: relative; }
+        .game-header { padding: 15px; background: #0c0c14; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; }
+        #score-display { font-family: 'Orbitron', sans-serif; color: #10b981; font-size: 1.3rem; }
+        
+        #canvas-wrapper { flex-grow: 1; display: flex; justify-content: center; align-items: center; background: #1a1a24; position: relative; }
+        canvas { background: #222; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: none; }
+        
+        /* ÖNİZLEME EKRANI (GARAJDAKİ ARABA) */
+        #car-preview-box { position: absolute; width: 200px; height: 350px; background: #111; border-radius: 14px; border: 2px dashed #3b82f6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 20px; }
+        .preview-car { width: 70px; height: 140px; background: #ff0000; border-radius: 8px; position: relative; transition: all 0.3s; box-shadow: 0 10px 20px rgba(0,0,0,0.6); }
+        .preview-wheel { width: 12px; height: 24px; background: #000; position: absolute; border-radius: 3px; }
+        .w-fl { top: 15px; left: -10px; } .w-fr { top: 15px; right: -10px; }
+        .w-bl { bottom: 15px; left: -10px; } .w-br { bottom: 15px; right: -10px; }
+        /* Hoparlör Görseli */
+        .preview-speaker { width: 40px; height: 25px; background: #222; border: 2px solid #555; position: absolute; bottom: 15px; left: 15px; border-radius: 4px; display: none; align-items: center; justify-content: center; gap: 4px; }
+        .subwoofer { width: 14px; height: 14px; background: #fff; border-radius: 50%; border: 2px solid #000; }
+
+        .btn-start-race { position: absolute; bottom: 30px; padding: 15px 40px; background: #10b981; border: none; border-radius: 8px; color: white; font-size: 1.2rem; font-weight: bold; cursor: pointer; font-family: 'Orbitron', sans-serif; box-shadow: 0 0 15px #10b98144; }
+        .btn-start-race:hover { background: #059669; transform: scale(1.05); }
+
+        /* 3. SAĞ PANEL: SOHBET MODU */
+        .chat-panel { background: #0c0c14; border-left: 2px solid #1e293b; display: flex; flex-direction: column; }
+        .chat-messages { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .chat-input-area { padding: 15px; border-top: 1px solid #1e293b; display: flex; gap: 8px; }
+        .chat-input-area input { flex-grow: 1; padding: 12px; background: #131322; border: 1px solid #1e293b; border-radius: 8px; color: white; }
+        .chat-input-area button { padding: 0 15px; background: #3b82f6; border: none; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        
+        <!-- MODİFİYE ALANI -->
+        <div class="garage-panel">
+            <h2>Tofaş Garajı</h2>
+            
+            <div class="control-group">
+                <label>Kaporta Rengi</label>
+                <button class="btn-mod" onclick="changeColor('#ff0000')">🔴 Kırmızı</button>
+                <button class="btn-mod" onclick="changeColor('#00bfff')">🔵 Neon Mavi</button>
+                <button class="btn-mod" onclick="changeColor('#32cd32')">🟢 Ünal Turan Yeşili</button>
+                <button class="btn-mod" onclick="changeColor('#f1c40f')">🟡 Altın Sarısı</button>
+            </div>
+
+            <div class="control-group">
+                <label>Süspansiyon (Basıklık)</label>
+                <input type="range" class="range-slider" min="0" max="15" value="5" id="suspension-slider" oninput="adjustSuspension(this.value)">
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-top:5px; color:#64748b;">
+                    <span>Orijinal</span><span>Sürüngen (Basık)</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Bagaj Ses Sistemi</label>
+                <button class="btn-mod" id="speaker-btn" onclick="toggleSpeakers()">🔊 Hoparlörleri Koy (+800W)</button>
+            </div>
+        </div>
+
+        <!-- YARIŞ PİSTİ -->
+        <div class="main-play-area">
+            <div class="game-header">
+                <span style="font-weight: bold; font-size: 1.1rem;">Yarış Ekranı (Yön Tuşları / A-D ile oyna)</span>
+                <span id="score-display">Skor: 0</span>
+            </div>
+
+            <div id="canvas-wrapper">
+                <!-- Canlı Yarış Tuvali -->
+                <canvas id="raceCanvas" width="400" height="550"></canvas>
+
+                <!-- Garaj Önizleme Kutusu -->
+                <div id="car-preview-box">
+                    <span style="color:#64748b; font-weight:bold;">GARAJ ÖNİZLEME</span>
+                    <div class="preview-car" id="pCar">
+                        <div class="preview-wheel w-fl" id="wfl"></div>
+                        <div class="preview-wheel w-fr" id="wfr"></div>
+                        <div class="preview-wheel w-bl"></div>
+                        <div class="preview-wheel w-br"></div>
+                        <div class="preview-speaker" id="pSpeaker">
+                            <div class="subwoofer"></div>
+                            <div class="subwoofer"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-start-race" id="start-btn" onclick="startRace()">MAKASA ÇIK (YARIŞI BAŞLAT)</button>
+            </div>
+        </div>
+
+        <!-- SOHBET MODU -->
+        <div class="chat-panel">
+            <h2>Lobi Sohbet</h2>
+            <div class="chat-messages" id="chatBox">
+                <div style="background:#131322; padding:10px; border-radius:8px; border-left:3px solid #3b82f6;">
+                    <b style="color:#3b82f6;">Semt Oturuşu Bot:</b> Sola basık Tofaş'ın hazırsa makasa çık kanka!
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" placeholder="Mesaj yaz..." onkeypress="handleChatKey(event)">
+                <button onclick="sendChatMessage()">></button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // OYUN AYARLARI VE DEĞİŞKENLERİ
+        let carColor = '#ff0000';
+        let isLow = false;
+        let hasSpeakers = false;
+        let gameRunning = false;
+        let score = 0;
+
+        const canvas = document.getElementById('raceCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Oyuncu Arabası Konumu
+        let playerX = 175;
+        let playerY = 420;
+        let roadOffset = 0;
+
+        // Trafikteki Diğer Arabalar
+        let trafficCars = [
+            { x: 100, y: -150, speed: 4, color: '#f1c40f' },
+            { x: 250, y: -400, speed: 5, color: '#9b59b6' }
+        ];
+
+        // Tuş Kontrolleri
+        let keys = {};
+        window.addEventListener('keydown', (e) => keys[e.key] = true);
+        window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        // MODİFİYE FONKSİYONLARI
+        function changeColor(color) {
+            carColor = color;
+            document.getElementById('pCar').style.backgroundColor = color;
+        }
+
+        function adjustSuspension(val) {
+            // Sürgüyü çektikçe tekerlekler içeri girer (Basıklık hissi)
+            let offset = parseInt(val);
+            document.getElementById('wfl').style.left = `-${10 - offset/2}px`;
+            document.getElementById('wfr').style.right = `-${10 - offset/2}px`;
+            if(offset > 10) {
+                isLow = true;
+                addSystemMessage("Araba fena basıldı, sürtüyor kanka!");
+            } else {
+                isLow = false;
+            }
+        }
+
+        function toggleSpeakers() {
+            hasSpeakers = !hasSpeakers;
+            const btn = document.getElementById('speaker-btn');
+            const pSpeaker = document.getElementById('pSpeaker');
+            if(hasSpeakers) {
+                btn.innerText = "💥 Sistem Kuruldu (Bass Mod Açık)";
+                btn.style.background = "#10b981";
+                pSpeaker.style.display = "flex";
+                addSystemMessage("Bagaja tesisat atıldı, mahalle ayağa kalkacak!");
+            } else {
+                btn.innerText = "🔊 Hoparlörleri Koy (+800W)";
+                btn.style.background = "#1e3a8a";
+                pSpeaker.style.display = "none";
+            }
+        }
+
+        // SOHBET SİSTEMİ
+        function sendChatMessage() {
+            let input = document.getElementById('chatInput');
+            let txt = input.value.trim();
+            if(!txt) return;
+
+            let box = document.getElementById('chatBox');
+            box.innerHTML += `<div style="padding:5px;"><b>Sen:</b> ${txt}</div>`;
+            input.value = '';
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function handleChatKey(e) { if(e.key === 'Enter') sendChatMessage(); }
+        function addSystemMessage(msg) {
+            let box = document.getElementById('chatBox');
+            box.innerHTML += `<div style="background:#131322; padding:8px; border-radius:6px; font-size:0.9rem; color:#a855f7;"><b>Garaj Usta:</b> ${msg}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        // OYUN MOTORU (YARIŞ ALANI)
+        function startRace() {
+            document.getElementById('car-preview-box').style.display = 'none';
+            document.getElementById('start-btn').style.display = 'none';
+            canvas.style.display = 'block';
+            gameRunning = true;
+            score = 0;
+            trafficCars = [
+                { x: 80, y: -150, speed: 4, color: '#f1c40f' },
+                { x: 240, y: -450, speed: 5, color: '#9b59b6' }
+            ];
+            playerX = 175;
+            updateGame();
+        }
+
+        function updateGame() {
+            if(!gameRunning) return;
+
+            // Araba Hareketi
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) { if(playerX > 50) playerX -= 5; }
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) { if(playerX < 300) playerX += 5; }
+
+            // Arka Plan Yol Akışı
+            roadOffset += 6;
+            if(roadOffset > 40) roadOffset = 0;
+
+            // Ekranı Temizle
+            ctx.fillStyle = '#1a1a24';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Asfalt ve Yol Çizgileri Çizimi
+            ctx.fillStyle = '#2d3748';
+            ctx.fillRect(50, 0, 300, canvas.height);
+
+            ctx.strokeStyle = '#fff';
+            ctx.setLineDash([20, 20]);
+            ctx.lineDashOffset = -roadOffset;
+            
+            // Şerit Çizgileri
+            ctx.beginPath(); ctx.moveTo(150, 0); ctx.lineTo(150, canvas.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(250, 0); ctx.lineTo(250, canvas.height); ctx.stroke();
+
+            // Kendi Arabamız (Tofaş)
+            ctx.fillStyle = carColor;
+            ctx.fillRect(playerX, playerY, 45, 90); // Gövde
+            // Camlar
+            ctx.fillStyle = '#111';
+            ctx.fillRect(playerX + 5, playerY + 20, 35, 15);
+            ctx.fillRect(playerX + 5, playerY + 50, 35, 20);
+            // Far Işıkları (Modifiye Detay)
+            ctx.fillStyle = '#fffde7';
+            ctx.fillRect(playerX + 4, playerY - 4, 8, 4);
+            ctx.fillRect(playerX + 33, playerY - 4, 8, 4);
+
+            // Trafikteki Arabaları Güncelle ve Çiz
+            trafficCars.forEach(car => {
+                car.y += car.speed;
+                if(car.y > canvas.height) {
+                    car.y = -100;
+                    car.x = 60 + Math.random() * 220;
+                    score += 10;
+                    document.getElementById('score-display').innerText = "Skor: " + score;
+                }
+
+                // Trafik Arabası Çizim
+                ctx.fillStyle = car.color;
+                ctx.fillRect(car.x, car.y, 45, 90);
+                ctx.fillStyle = '#222';
+                ctx.fillRect(car.x + 5, car.y + 20, 35, 20);
+
+                // Çarpışma Kontrolü (Kaza)
+                if (playerX < car.x + 45 && playerX + 45 > car.x &&
+                    playerY < car.y + 90 && playerY + 90 > car.y) {
+                    gameOver();
+                }
+            });
+
+            requestAnimationFrame(updateGame);
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            alert("Kaza Yaptın Kanka! Arabayı Sanayiye Çekeceğiz. Toplam Skorun: " + score);
+            document.getElementById('car-preview-box').style.display = 'flex';
+            document.getElementById('start-btn').style.display = 'block';
+            canvas.style.display = 'none';
+            addSystemMessage(`Son yarışta ${score} skor yaptın. Arabada ağır hasar var, usta tamir ediyor...`);
+        }
+    </script>
+</body>
+</html>
