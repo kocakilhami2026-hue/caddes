@@ -1,240 +1,26 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CADDES - Car Parking Simulator</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
-        body, html { width: 100%; height: 100%; overflow: hidden; background: #222; }
-        
-        /* 3D Otopark Alanı */
-        #gameArea { 
-            width: 100vw; height: 100vh; position: relative; 
-            background: #333; overflow: hidden;
-        }
+using UnityEngine;
 
-        /* Otopark Zemin Çizgileri ve Detaylar */
-        #parkingLot {
-            position: absolute; width: 2000px; height: 2000px;
-            background-color: #2b2b2b;
-            background-image: 
-                linear-gradient(rgba(255,255,255,0.05) 2px, transparent 2px),
-                linear-gradient(90deg, rgba(255,255,255,0.05) 2px, transparent 2px);
-            background-size: 100px 100px;
-            transform-origin: 0 0;
-        }
+public class ArabaKontrol : MonoBehaviour
+{
+    // Arabanın tekerlek nesneleri (Unity içindeki 3D modeller)
+    public WheelCollider onSol, onSag;
+    public WheelCollider arkaSol, arkaSag;
 
-        /* Sarı Hedef Park Alanı */
-        .target-slot {
-            position: absolute; width: 100px; height: 180px;
-            border: 4px dashed #ffcc00; background: rgba(255, 204, 0, 0.15);
-            left: 500px; top: 400px; display: flex; justify-content: center;
-            align-items: center; color: #ffcc00; font-weight: bold; font-size: 14px;
-            transform: rotate(30deg);
-        }
+    public float motorGucu = 1500f;
+    public float donmeAcisi = 35f;
 
-        /* Park Etmiş Diğer Arabalar (Engeller) */
-        .obstacle-car {
-            position: absolute; width: 90px; height: 170px;
-            border-radius: 8px; box-shadow: 0 10px 15px rgba(0,0,0,0.4);
-        }
-        .obs-1 { background: #cc2222; left: 400px; top: 350px; transform: rotate(30deg); }
-        .obs-2 { background: #2266cc; left: 620px; top: 460px; transform: rotate(30deg); }
-        .obs-3 { background: #555; left: 800px; top: 200px; transform: rotate(90deg); }
+    void FixedUpdate()
+    {
+        // Klavyeden veya telefondan gelen girdileri al (Gaz ve Direksiyon)
+        float gaz = Input.GetAxis("Vertical");       // W/S veya İleri/Geri
+        float direksiyon = Input.GetAxis("Horizontal"); // A/D veya Sağ/Sol
 
-        /* Oyuncunun Arabası */
-        #playerCar {
-            position: absolute; width: 85px; height: 165px;
-            background: url('https://images.unsplash.com/photo-1617469767053-d3b508a0d145?auto=format&fit=crop&w=300&q=80') center no-repeat;
-            background-size: contain; filter: drop-shadow(0 8px 10px rgba(0,0,0,0.5));
-            left: 500px; top: 700px; transform-origin: center center;
-            z-index: 10; transition: transform 0.05s linear;
-        }
+        // Arka tekerleklere güç ver (Arkadan itişli)
+        arkaSol.motorTorque = gaz * motorGucu;
+        arkaSag.motorTorque = gaz * motorGucu;
 
-        /* Göstergeler (HUD) */
-        #hud {
-            position: absolute; top: 20px; left: 20px; color: white; z-index: 100;
-            background: rgba(0,0,0,0.85); padding: 20px; border-radius: 12px;
-            border-left: 6px solid #ffcc00; width: 250px;
-        }
-        .gear-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-weight: bold; margin-top: 8px; }
-        .gear-d { background: #00ffcc; color: #000; }
-        .gear-r { background: #ff3333; color: #fff; }
-
-        #controls {
-            position: absolute; bottom: 20px; right: 20px; color: white; z-index: 100;
-            background: rgba(0,0,0,0.85); padding: 15px; border-radius: 12px; font-size: 13px;
-        }
-        
-        #winScreen {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center;
-            align-items: center; flex-direction: column; color: white;
-        }
-        .btn-restart { background: #ffcc00; border: none; padding: 12px 30px; font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 20px; }
-    </style>
-</head>
-<body>
-
-    <div id="gameArea">
-        <!-- Otopark Haritası -->
-        <div id="parkingLot">
-            <!-- Hedef Park Alanı -->
-            <div class="target-slot" id="targetSlot">PARK ALANI</div>
-            
-            <!-- Trafikteki Sabit Arabalar -->
-            <div class="obstacle-car obs-1"></div>
-            <div class="obstacle-car obs-2"></div>
-            <div class="obstacle-car obs-3"></div>
-            
-            <!-- Bizim Arabamız -->
-            <div id="playerCar"></div>
-        </div>
-    </div>
-
-    <!-- Gösterge Paneli -->
-    <div id="hud">
-        <h3 style="color: #ffcc00; margin-bottom: 5px;">CADDES: CAR PARKING</h3>
-        <div>Hız: <span id="speedTxt" style="color: #00ffcc; font-weight: bold;">0</span> km/h</div>
-        <div>Vites: <span id="gearTxt" class="gear-badge gear-d">D (İLERİ)</span></div>
-        <div style="margin-top: 10px; font-size: 13px; color: #aaa;">Durum: <span id="statusTxt" style="color: #fff;">Sürüşe Hazır</span></div>
-    </div>
-
-    <!-- Kontroller Bilgisi -->
-    <div id="controls">
-        <p><b>🎮 OYUN KONTROLLERİ:</b></p>
-        <p>• <b>Gaz / Fren:</b> Yön Tuşları (Yukarı / Aşağı)</p>
-        <p>• <b>Direksiyon:</b> Yön Tuşları (Sağ / Sol)</p>
-        <p>• <b>[ R ] Tuşu:</b> Geri Vitese Geç</p>
-        <p>• <b>[ D ] Tuşu:</b> İleri Vitese Geç</p>
-    </div>
-
-    <!-- Başarı Ekranı -->
-    <div id="winScreen">
-        <h1 style="color: #00ffcc; font-size: 48px;">MÜKEMMEL PARK! 🎯</h1>
-        <p style="font-size: 20px; margin-top: 10px;">Çarpmadan tam yerine yanaştın.</p>
-        <button class="btn-restart" onclick="resetGame()">Tekrar Oyna</button>
-    </div>
-
-    <script>
-        const car = document.getElementById('playerCar');
-        const map = document.getElementById('parkingLot');
-        const gearTxt = document.getElementById('gearTxt');
-        const speedTxt = document.getElementById('speedTxt');
-        const statusTxt = document.getElementById('statusTxt');
-        const winScreen = document.getElementById('winScreen');
-
-        // Araba Fizik Değişkenleri
-        let carX = 450, carY = 650;
-        let speed = 0;
-        let maxSpeed = 6;
-        let acceleration = 0.2;
-        let friction = 0.08;
-        let angle = 0;
-        let steerAngle = 0;
-        let currentGear = 'D'; // D: İleri, R: Geri
-
-        // Klavye Durumları
-        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key in keys) keys[e.key] = true;
-            
-            // Vites Değiştirme
-            if (e.key.toLowerCase() === 'r') {
-                currentGear = 'R';
-                gearTxt.innerText = "R (GERİ VİTES)";
-                gearTxt.className = "gear-badge gear-r";
-            }
-            if (e.key.toLowerCase() === 'd') {
-                currentGear = 'D';
-                gearTxt.innerText = "D (İLERİ)";
-                gearTxt.className = "gear-badge gear-d";
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            if (e.key in keys) keys[e.key] = false;
-        });
-
-        // Ana Oyun Döngüsü
-        function updateGame() {
-            // İleri / Geri Hızlanma
-            if (keys.ArrowUp) {
-                if (currentGear === 'D') {
-                    if (speed < maxSpeed) speed += acceleration;
-                } else {
-                    if (speed > -maxSpeed) speed -= acceleration;
-                }
-            } else if (keys.ArrowDown) {
-                // Fren yapma veya ters hareket
-                if (currentGear === 'D') {
-                    if (speed > -maxSpeed/2) speed -= acceleration * 1.5;
-                } else {
-                    if (speed < maxSpeed/2) speed += acceleration * 1.5;
-                }
-            } else {
-                // Sürtünme ile yavaşlama
-                if (speed > 0) speed -= friction;
-                else if (speed < 0) speed += friction;
-                if (Math.abs(speed) < 0.1) speed = 0;
-            }
-
-            // Direksiyon Dönüşü (Sadece hareket halindeyken döner)
-            if (Math.abs(speed) > 0.5) {
-                let checkDirection = speed > 0 ? 1 : -1;
-                if (keys.ArrowLeft) angle -= 2.5 * checkDirection;
-                if (keys.ArrowRight) angle += 2.5 * checkDirection;
-            }
-
-            // Pozisyon Hesaplama (Trigonometrik yön açısı)
-            carX += speed * Math.sin(angle * Math.PI / 180);
-            carY -= speed * Math.cos(angle * Math.PI / 180);
-
-            // Harita Sınırları Kontrolü
-            if (carX < 50 || carX > 1500 || carY < 50 || carY > 1500) {
-                speed = -speed * 0.5; // Duvara çarpınca sektir
-                statusTxt.innerText = "⚠️ Sınıra Çarptın!";
-                statusTxt.style.color = "#ff3333";
-            }
-
-            // Arabayı ve Kamerayı Güncelle
-            car.style.left = carX + 'px';
-            car.style.top = carY + 'px';
-            car.style.transform = `rotate(${angle}deg)`;
-
-            // Kamerayı arabaya odakta tutma (Haritayı kaydırarak)
-            map.style.transform = `translate(${window.innerWidth/2 - carX}px, ${window.innerHeight/2 - carY}px)`;
-
-            // Hız Göstergesini Yazdır
-            speedTxt.innerText = Math.abs(Math.round(speed * 15));
-
-            // Basit Park Etme Kontrolü (Hedef koordinatlara yaklaştı mı?)
-            if (Math.abs(carX - 520) < 30 && Math.abs(carY - 430) < 30) {
-                // Doğru açıda mı park etti?
-                if (Math.abs((angle % 360) - 30) < 15 || Math.abs((angle % 360) - 210) < 15) {
-                    winScreen.style.display = 'flex';
-                }
-            }
-
-            requestAnimationFrame(updateGame);
-        }
-
-        function resetGame() {
-            carX = 450; carY = 650; speed = 0; angle = 0;
-            currentGear = 'D';
-            gearTxt.innerText = "D (İLERİ)";
-            gearTxt.className = "gear-badge gear-d";
-            winScreen.style.display = 'none';
-            statusTxt.innerText = "Sürüşe Hazır";
-            statusTxt.style.color = "#fff";
-        }
-
-        // Oyunu Başlat
-        updateGame();
-    </script>
-</body>
-</html>
-
-
+        // Ön tekerlekleri döndür
+        onSol.steerAngle = direksiyon * donmeAcisi;
+        onSag.steerAngle = direksiyon * donmeAcisi;
+    }
+}
