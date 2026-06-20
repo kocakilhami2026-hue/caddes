@@ -2,94 +2,407 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Tarayıcı Park Etme Oyunu</title>
+    <title>3D Modifiyeli Tır Simülatörü</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { background-color: #222; text-align: center; color: white; font-family: sans-serif; }
-        canvas { background-color: #666; display: block; margin: 20px auto; border: 4px solid #333; }
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        /* Modifiye ve Kontrol Paneli */
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(20, 20, 20, 0.85);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            width: 280px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h2 { margin-top: 0; color: #ff3333; font-size: 22px; text-transform: uppercase; letter-spacing: 1px; }
+        .section-title { font-weight: bold; margin: 15px 0 5px 0; color: #aaa; font-size: 14px; }
+        .btn-group { display: flex; gap: 5px; margin-bottom: 10px; }
+        button {
+            flex: 1;
+            background: #333;
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.2s;
+            font-weight: bold;
+        }
+        button:hover { background: #555; }
+        button.active { background: #ff3333; }
+        .color-picker {
+            width: 100%;
+            height: 35px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: none;
+        }
+        #hiz-gostergesi {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(0,0,0,0.8);
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 32px;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 2px solid #333;
+        }
+        #controls-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255,255,255,0.7);
+            font-size: 13px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
-    <h1>Basit Park Etme Oyunu</h1>
-    <p>Ok Tuşları veya W-A-S-D ile arabayı yeşil alana park et!</p>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-panel">
+        <h2>TIR ATÖLYESİ</h2>
+        
+        <div class="section-title">Kabin Rengi (Gövde)</div>
+        <input type="color" id="kabin-renk" class="color-picker" value="#ff0000">
+
+        <div class="section-title">Şasi Rengi (Alt Kısım)</div>
+        <input type="color" id="sasi-renk" class="color-picker" value="#111111">
+
+        <div class="section-title">Egzoz Seçeneği</div>
+        <div class="btn-group">
+            <button id="egzoz-stok" class="active" onclick="setEgzoz('stok')">Stok</button>
+            <button id="egzoz-krom" onclick="setEgzoz('krom')">Krom Dik</button>
+        </div>
+
+        <div class="section-title">Işıklandırma (Neon)</div>
+        <div class="btn-group">
+            <button id="neon-kapali" class="active" onclick="setNeon(false)">Kapalı</button>
+            <button id="neon-acik" onclick="setNeon(true)">Yerden Neon</button>
+        </div>
+
+        <div class="section-title">Süspansiyon (Basıklık)</div>
+        <div class="btn-group">
+            <button id="susp-orj" class="active" onclick="setSuspansiyon(0)">Orijinal</button>
+            <button id="susp-basik" onclick="setSuspansiyon(-0.2)">Basık (Sürüngen)</button>
+        </div>
+    </div>
+
+    <div id="hiz-gostergesi"><span id="hiz-deger">0</span> KM/H</div>
+
+    <div id="controls-info">
+        <b>Sürüş:</b> Gelişmiş Fizik (W, A, S, D veya Ok Tuşları)<br>
+        <b>Kamera:</b> Fare ile basılı tutup sürükleyerek tırı incele
+    </div>
 
     <script>
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
+        // --- 1. SAHNE VE AYARLARIMIZ ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a24); // Gece/Akşamüstü atmosferi
+        scene.fog = new THREE.FogExp2(0x1a1a24, 0.015);
 
-        // Park Alanı
-        const spot = { x: 650, y: 450, w: 100, h: 60 };
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
 
-        // Araba Özellikleri
-        const car = {
-            x: 100, y: 100,
-            w: 50, h: 30,
-            angle: 0, speed: 0,
-            maxSpeed: 4, accel: 0.1, friction: 0.05, turnSpeed: 0.05
-        };
+        // --- 2. IŞIKLANDIRMALAR ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
 
-        const keys = {};
-        window.addEventListener("keydown", e => keys[e.key] = true);
-        window.addEventListener("keyup", e => keys[e.key] = false);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
 
-        function update() {
-            // İleri / Geri
-            if (keys["ArrowUp"] || keys["w"] || keys["W"]) car.speed = Math.min(car.speed + car.accel, car.maxSpeed);
-            else if (keys["ArrowDown"] || keys["s"] || keys["S"]) car.speed = Math.max(car.speed - car.accel, -car.maxSpeed/2);
-            else {
-                if (car.speed > 0) car.speed = Math.max(0, car.speed - car.friction);
-                if (car.speed < 0) car.speed = Math.min(0, car.speed + car.friction);
+        // Sokak lambası hissi veren büyük ışık
+        const spotLight = new THREE.SpotLight(0xffaa66, 1, 100, Math.PI/4, 0.5, 1);
+        spotLight.position.set(0, 30, 0);
+        scene.add(spotLight);
+
+        // --- 3. HARİTA (YOL VE ÇEVRE) ---
+        const floorGeo = new THREE.PlaneGeometry(500, 500);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x111116, roughness: 0.8 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Asfalt çizgileri ve yollar (Basit pist tasarımı)
+        const grid = new THREE.GridHelper(500, 100, 0x333344, 0x222228);
+        grid.position.y = 0.01;
+        scene.add(grid);
+
+        // --- 4. TIR MODELİNİ OLUŞTURMA (PARÇALI MODİFİYE SİSTEMİ) ---
+        const truckGroup = new THREE.Group();
+        scene.add(truckGroup);
+
+        // Materyaller
+        const kabinMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.2, metalness: 0.5 });
+        const sasiMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+        const camMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1, metalness: 0.9 });
+        const tekerMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9 });
+        const kromMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 1.0, roughness: 0.1 });
+        const neonMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, visible: false });
+
+        // Şasi (Alt İskelet)
+        const sasiGeo = new THREE.BoxGeometry(2.2, 0.6, 6);
+        const sasi = new THREE.Mesh(sasiGeo, sasiMat);
+        sasi.position.y = 0.6;
+        sasi.castShadow = true;
+        truckGroup.add(sasi);
+
+        // Kabin (Ön Taraf)
+        const kabinGeo = new THREE.BoxGeometry(2.2, 2.2, 2.2);
+        const kabin = new THREE.Mesh(kabinGeo, kabinMat);
+        kabin.position.set(0, 1.8, 1.8);
+        kabin.castShadow = true;
+        truckGroup.add(kabin);
+
+        // Ön Cam
+        const camGeo = new THREE.BoxGeometry(2.0, 0.8, 0.1);
+        const cam = new THREE.Mesh(camGeo, camMat);
+        cam.position.set(0, 2.2, 2.91);
+        truckGroup.add(cam);
+
+        // Yan Camlar
+        const yanCamGeo = new THREE.BoxGeometry(0.1, 0.8, 1.0);
+        const solCam = new THREE.Mesh(yanCamGeo, camMat);
+        solCam.position.set(-1.11, 2.2, 1.8);
+        const sagCam = solCam.clone();
+        sagCam.position.x = 1.11;
+        truckGroup.add(solCam);
+        truckGroup.add(sagCam);
+
+        // Büyük Krom Izgara (Ön tampon)
+        const izgaraGeo = new THREE.BoxGeometry(1.8, 0.8, 0.1);
+        const izgara = new THREE.Mesh(izgaraGeo, kromMat);
+        izgara.position.set(0, 1.1, 2.91);
+        truckGroup.add(izgara);
+
+        // Tekerlekler (Gerçekçi konumlandırma)
+        const tekerGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.5, 24);
+        tekerGeo.rotateZ(Math.PI / 2);
+
+        const tekerKonumlari = [
+            {x: -1.1, y: 0.55, z: 2.0},  // Ön Sol
+            {x: 1.1, y: 0.55, z: 2.0},   // Ön Sağ
+            {x: -1.1, y: 0.55, z: -1.2}, // Orta Sol
+            {x: 1.1, y: 0.55, z: -1.2},  // Orta Sağ
+            {x: -1.1, y: 0.55, z: -2.4}, // Arka Sol
+            {x: 1.1, y: 0.55, z: -2.4}   // Arka Sağ
+        ];
+
+        const tekerlekler = [];
+        tekerKonumlari.forEach(konum => {
+            const t = new THREE.Mesh(tekerGeo, tekerMat);
+            t.position.set(konum.x, konum.y, konum.z);
+            t.castShadow = true;
+            truckGroup.add(t);
+            tekerlekler.push(t);
+        });
+
+        // Modifiye Parçası: Krom Düz Egzozlar (Başlangıçta gizli veya pasif mantığında)
+        const egzozG = new THREE.Group();
+        const egzozBorusuGeo = new THREE.CylinderGeometry(0.1, 0.1, 2.5, 16);
+        const boruSol = new THREE.Mesh(egzozBorusuGeo, kromMat);
+        boruSol.position.set(-1.2, 2.4, 0.5);
+        const boruSag = boruSol.clone();
+        boruSag.position.x = 1.2;
+        egzozG.add(boruSol, boruSag);
+        truckGroup.add(egzozG);
+        egzozG.visible = false; // Stok seçili olduğu için gizli başlar
+
+        // Modifiye Parçası: Neon Işıkları
+        const neonGeo = new THREE.BoxGeometry(2.0, 0.1, 4.5);
+        const neonIzik = new THREE.Mesh(neonGeo, neonMat);
+        neonIzik.position.set(0, 0.15, 0);
+        truckGroup.add(neonIzik);
+
+        // --- 5. GELİŞMİŞ GERÇEKÇİ SÜRÜŞ FİZİĞİ ---
+        let hizi = 0;
+        let acisi = 0;
+        const maksHiz = 0.4;
+        const ivme = 0.008;
+        const fren = 0.015;
+        const surtunme = 0.003;
+        const donmeHizi = 0.03;
+
+        const tuslar = { w: false, a: false, s: false, d: false };
+
+        window.addEventListener('keydown', (e) => {
+            if(e.key === 'w' || e.key === 'ArrowUp') tuslar.w = true;
+            if(e.key === 'a' || e.key === 'ArrowLeft') tuslar.a = true;
+            if(e.key === 's' || e.key === 'ArrowDown') tuslar.s = true;
+            if(e.key === 'd' || e.key === 'ArrowRight') tuslar.d = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if(e.key === 'w' || e.key === 'ArrowUp') tuslar.w = false;
+            if(e.key === 'a' || e.key === 'ArrowLeft') tuslar.a = false;
+            if(e.key === 's' || e.key === 'ArrowDown') tuslar.s = false;
+            if(e.key === 'd' || e.key === 'ArrowRight') tuslar.d = false;
+        });
+
+        function fizikDongusu() {
+            // Gaz ve Fren Mekaniği
+            if (tuslar.w) {
+                hizi = Math.min(hizi + ivme, maksHiz);
+            } else if (tuslar.s) {
+                hizi = Math.max(hizi - fren, -maksHiz / 2);
+            } else {
+                // Boşta süzülme sürtünmesi
+                if (hizi > 0) hizi = Math.max(0, hizi - surtunme);
+                if (hizi < 0) hizi = Math.min(0, hizi + surtunme);
             }
 
-            // Dönüşler
-            if (car.speed !== 0) {
-                let dir = car.speed > 0 ? 1 : -1;
-                if (keys["ArrowLeft"] || keys["a"] || keys["A"]) car.angle -= car.turnSpeed * dir;
-                if (keys["ArrowRight"] || keys["d"] || keys["D"]) car.angle += car.turnSpeed * dir;
+            // Direksiyon Dönüş Mekaniği
+            if (hizi !== 0) {
+                const yon = hizi > 0 ? 1 : -1;
+                if (tuslar.a) acisi += donmeHizi * yon;
+                if (tuslar.d) acisi -= donmeHizi * yon;
             }
 
-            // Pozisyon Güncelleme
-            car.x += car.speed * Math.cos(car.angle);
-            car.y += car.speed * Math.sin(car.angle);
+            // Pozisyonu Açıya Göre İleri Taşıma
+            truckGroup.position.x += hizi * Math.sin(acisi);
+            truckGroup.position.z += hizi * Math.cos(acisi);
+            truckGroup.rotation.y = acisi;
 
-            // Kazanma Kontrolü
-            if (car.x > spot.x && car.x < spot.x + spot.w && car.y > spot.y && car.y < spot.y + spot.h) {
-                ctx.fillStyle = "black";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = "yellow";
-                ctx.font = "40px sans-serif";
-                ctx.fillText("MÜKEMMEL PARK! TEBRİKLER!", 150, 300);
-                return;
-            }
+            // Tekerleklerin dönme animasyonu (Hıza bağlı dönme)
+            tekerlekler.forEach((t, index) => {
+                t.rotation.x += hizi * 1.5;
+                // Ön tekerlekleri direksiyona göre sağa sola çevirme görüntüsü
+                if(index === 0 || index === 1) {
+                    if(tuslar.a) t.rotation.y = 0.4;
+                    else if(tuslar.d) t.rotation.y = -0.4;
+                    else t.rotation.y = 0;
+                }
+            });
 
-            draw();
-            requestAnimationFrame(update);
+            // Göstergeyi güncelle (Yapay km/h hesabı)
+            document.getElementById('hiz-deger').innerText = Math.round(Math.abs(hizi) * 350);
         }
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // --- 6. DINAMIK KAMERA TAKİBİ VE MOUSE KONTROLÜ ---
+        let kameraAcisi = 0;
+        let fareBasili = false;
+        let eskiFareX = 0;
 
-            // Park yerini çiz
-            ctx.strokeStyle = "#00FF00";
-            ctx.lineWidth = 4;
-            ctx.strokeRect(spot.x, spot.y, spot.w, spot.h);
+        window.addEventListener('mousedown', (e) => { fareBasili = true; eskiFareX = e.clientX; });
+        window.addEventListener('mouseup', () => { fareBasili = false; });
+        window.addEventListener('mousemove', (e) => {
+            if (fareBasili) {
+                const farkX = e.clientX - eskiFareX;
+                kameraAcisi -= farkX * 0.007;
+                eskiFareX = e.clientX;
+            }
+        });
 
-            // Arabayı çiz
-            ctx.save();
-            ctx.translate(car.x, car.y);
-            ctx.rotate(car.angle);
+        function kameraTakipDongusu() {
+            // Kamerayı tırın arkasına, yumuşak dönüş açısıyla konumlandırıyoruz
+            const r = 12; // Tıra olan uzaklık
+            const toplamAci = acisi + kameraAcisi + Math.PI; 
             
-            ctx.fillStyle = "red";
-            ctx.fillRect(-car.w/2, -car.h/2, car.w, car.h);
-            
-            // Ön Cam (Sarı şerit önü gösterir)
-            ctx.fillStyle = "yellow";
-            ctx.fillRect(car.w/2 - 10, -car.h/2, 10, car.h);
-            
-            ctx.restore();
+            camera.position.x = truckGroup.position.x + r * Math.sin(toplamAci);
+            camera.position.z = truckGroup.position.z + r * Math.cos(toplamAci);
+            camera.position.y = truckGroup.position.y + 4.5; // Yükseklik
+
+            camera.lookAt(truckGroup.position.x, truckGroup.position.y + 1.5, truckGroup.position.z);
         }
 
-        update();
+        // --- 7. MODİFİYE FONKSİYONLARI (Arayüz Bağlantıları) ---
+        document.getElementById('kabin-renk').addEventListener('input', (e) => {
+            kabinMat.color.set(e.target.value);
+        });
+
+        document.getElementById('sasi-renk').addEventListener('input', (e) => {
+            sasiMat.color.set(e.target.value);
+        });
+
+        function setEgzoz(tip) {
+            document.getElementById('egzoz-stok').classList.remove('active');
+            document.getElementById('egzoz-krom').classList.remove('active');
+            
+            if(tip === 'stok') {
+                egzozG.visible = false;
+                document.getElementById('egzoz-stok').classList.add('active');
+            } else {
+                egzozG.visible = true;
+                document.getElementById('egzoz-krom').classList.add('active');
+            }
+        }
+
+        function setNeon(durum) {
+            document.getElementById('neon-kapali').classList.remove('active');
+            document.getElementById('neon-acik').classList.remove('active');
+            
+            if(durum) {
+                neonMat.visible = true;
+                document.getElementById('neon-acik').classList.add('active');
+            } else {
+                neonMat.visible = false;
+                document.getElementById('neon-kapali').classList.add('active');
+            }
+        }
+
+        function setSuspansiyon(deger) {
+            document.getElementById('susp-orj').classList.remove('active');
+            document.getElementById('susp-basik').classList.remove('active');
+            
+            // Tır gövdesini şasiyle beraber aşağı/yukarı kaydırır (Tekerlekler sabit kalır)
+            sasi.position.y = 0.6 + deger;
+            kabin.position.y = 1.8 + deger;
+            cam.position.y = 2.2 + deger;
+            solCam.position.y = 2.2 + deger;
+            sagCam.position.y = 2.2 + deger;
+            izgara.position.y = 1.1 + deger;
+            egzozG.position.y = deger;
+
+            if(deger === 0) document.getElementById('susp-orj').add('active');
+            else document.getElementById('susp-basik').classList.add('active');
+        }
+
+        // --- 8. ANA OYUN DÖNGÜSÜ ---
+        function animate() {
+            requestAnimationFrame(animate);
+            fizikDongusu();
+            kameraTakipDongusu();
+            renderer.render(scene, camera);
+        }
+
+        // Ekran boyutu değiştiğinde oyunu uyarla
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Oyunu Başlat
+        animate();
     </script>
 </body>
 </html>
