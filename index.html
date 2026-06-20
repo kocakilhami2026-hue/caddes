@@ -1,26 +1,95 @@
-using UnityEngine;
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Tarayıcı Park Etme Oyunu</title>
+    <style>
+        body { background-color: #222; text-align: center; color: white; font-family: sans-serif; }
+        canvas { background-color: #666; display: block; margin: 20px auto; border: 4px solid #333; }
+    </style>
+</head>
+<body>
+    <h1>Basit Park Etme Oyunu</h1>
+    <p>Ok Tuşları veya W-A-S-D ile arabayı yeşil alana park et!</p>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
 
-public class ArabaKontrol : MonoBehaviour
-{
-    // Arabanın tekerlek nesneleri (Unity içindeki 3D modeller)
-    public WheelCollider onSol, onSag;
-    public WheelCollider arkaSol, arkaSag;
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
 
-    public float motorGucu = 1500f;
-    public float donmeAcisi = 35f;
+        // Park Alanı
+        const spot = { x: 650, y: 450, w: 100, h: 60 };
 
-    void FixedUpdate()
-    {
-        // Klavyeden veya telefondan gelen girdileri al (Gaz ve Direksiyon)
-        float gaz = Input.GetAxis("Vertical");       // W/S veya İleri/Geri
-        float direksiyon = Input.GetAxis("Horizontal"); // A/D veya Sağ/Sol
+        // Araba Özellikleri
+        const car = {
+            x: 100, y: 100,
+            w: 50, h: 30,
+            angle: 0, speed: 0,
+            maxSpeed: 4, accel: 0.1, friction: 0.05, turnSpeed: 0.05
+        };
 
-        // Arka tekerleklere güç ver (Arkadan itişli)
-        arkaSol.motorTorque = gaz * motorGucu;
-        arkaSag.motorTorque = gaz * motorGucu;
+        const keys = {};
+        window.addEventListener("keydown", e => keys[e.key] = true);
+        window.addEventListener("keyup", e => keys[e.key] = false);
 
-        // Ön tekerlekleri döndür
-        onSol.steerAngle = direksiyon * donmeAcisi;
-        onSag.steerAngle = direksiyon * donmeAcisi;
-    }
-}
+        function update() {
+            // İleri / Geri
+            if (keys["ArrowUp"] || keys["w"] || keys["W"]) car.speed = Math.min(car.speed + car.accel, car.maxSpeed);
+            else if (keys["ArrowDown"] || keys["s"] || keys["S"]) car.speed = Math.max(car.speed - car.accel, -car.maxSpeed/2);
+            else {
+                if (car.speed > 0) car.speed = Math.max(0, car.speed - car.friction);
+                if (car.speed < 0) car.speed = Math.min(0, car.speed + car.friction);
+            }
+
+            // Dönüşler
+            if (car.speed !== 0) {
+                let dir = car.speed > 0 ? 1 : -1;
+                if (keys["ArrowLeft"] || keys["a"] || keys["A"]) car.angle -= car.turnSpeed * dir;
+                if (keys["ArrowRight"] || keys["d"] || keys["D"]) car.angle += car.turnSpeed * dir;
+            }
+
+            // Pozisyon Güncelleme
+            car.x += car.speed * Math.cos(car.angle);
+            car.y += car.speed * Math.sin(car.angle);
+
+            // Kazanma Kontrolü
+            if (car.x > spot.x && car.x < spot.x + spot.w && car.y > spot.y && car.y < spot.y + spot.h) {
+                ctx.fillStyle = "black";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "yellow";
+                ctx.font = "40px sans-serif";
+                ctx.fillText("MÜKEMMEL PARK! TEBRİKLER!", 150, 300);
+                return;
+            }
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Park yerini çiz
+            ctx.strokeStyle = "#00FF00";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(spot.x, spot.y, spot.w, spot.h);
+
+            // Arabayı çiz
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            ctx.rotate(car.angle);
+            
+            ctx.fillStyle = "red";
+            ctx.fillRect(-car.w/2, -car.h/2, car.w, car.h);
+            
+            // Ön Cam (Sarı şerit önü gösterir)
+            ctx.fillStyle = "yellow";
+            ctx.fillRect(car.w/2 - 10, -car.h/2, 10, car.h);
+            
+            ctx.restore();
+        }
+
+        update();
+    </script>
+</body>
+</html>
